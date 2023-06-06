@@ -4,17 +4,58 @@ extends TextureRect
 
 
 const TEMPLATE_TEXTURE = "res://addons/tcg-toolkit/texture/card_example.png"
+const CARD_MODEL_RES = "res://assets/cardmodel/"
 enum BorderPositions {Internal, Center, External}
+enum TierBackground {Common, Uncommon, Rare, VeryRare}
 
 @export_placeholder("Creature Name") var title = ""
-@export_global_file("*.png") var title_icon
+@export var tier : TierBackground = 0:
+	set(value):
+		tier = value
+		queue_redraw()
+@export_range(0.001, 5) var size_scale : float = 1.0:
+	set(value):
+		size_scale = value
+		var parent_node = get_parent()
+		if parent_node and is_instance_of(parent_node, CardGroup):
+			if snapped(parent_node.cards_scale, 0.001) != snapped(value, 0.001):
+				parent_node.cards_scale = value
 
-@export_global_file("*.png") var card_texture = Card.TEMPLATE_TEXTURE
+@export_group("Card Model Layers", "layer_")
+@export_global_file("*.png") var layer_background = Card.CARD_MODEL_RES + "card_color_bg.png"
+var layer_background_texture : Texture
+@export_global_file("*.png") var layer_creature = ""
+var layer_creature_texture : Texture
+@export_global_file("*.png") var layer_border = Card.CARD_MODEL_RES + "card_border.png"
+var layer_border_texture : Texture
+@export_global_file("*.png") var layer_extra = ""
+var layer_extra_texture : Texture
+# icons
+# bonuses # lateral bars with effects to side cards
+@export_subgroup("Tier Colors", "tier_")
+@export var tier_common : Color = Color("#ffffff"):
+	set(value):
+		tier_common = value
+		queue_redraw()
+@export var tier_uncommon : Color = Color("#deff00"):
+	set(value):
+		tier_uncommon = value
+		queue_redraw()
+@export var tier_rare : Color = Color("#0096ff"):
+	set(value):
+		tier_rare = value
+		queue_redraw()
+@export var tier_veryrare : Color = Color("#a525ff"):
+	set(value):
+		tier_veryrare = value
+		queue_redraw()
 
 @export_group("Draw Properties", "draw_")
 @export_subgroup("size", "size_")
-@export var size_minimum_size : Vector2
-@export_flags("horizontal", "vertical") var size_auto_stretch = 0b00
+@export var draw_size : Vector2:
+	set(value):
+		draw_size = value
+		self.size = value
 @export_subgroup("border", "border_")
 @export var border_active = false:
 	set(value):
@@ -50,36 +91,75 @@ enum BorderPositions {Internal, Center, External}
 
 func _enter_tree():
 	# Insert to inherit object
-	self.texture = load(self.card_texture)
-	self.size_minimum_size = self.texture.get_size()
-	self.custom_minimum_size = self._get("size_minimum_size")
+	self.texture = load(self.layer_background)
+	self.draw_size = self.texture.get_size()
 	
-	# Change default values
-	#self.clip_contents = true
-	self.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	self.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-
-func _get(property):
-	if (property == "size_minimum_size"):
-		var parent_size = self.get_parent().get_rect().size
-		match self.size_auto_stretch:
-			0b01:
-				return Vector2(parent_size.x, self.size_minimum_size.y)
-			0b10:
-				return Vector2(self.size_minimum_size.x, parent_size.y)
-			0b11:
-				return parent_size
-		return self.size_minimum_size
+	self._load_card_models()
+	
+	# presets to sync Control sizes to self.draw_size
+	#self.layout_mode = 1
+	#self.anchors_preset = -1
+	#self.anchor_right = 1
+	#self.anchor_bottom = 1
+	#self.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	#self.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 
 func _draw():
+	self._draw_card_model()
 	if self.border_active:
 		self._draw_border()
 
+func _process(delta):
+	#self._update_offset_size()
+	pass
 
+
+
+func _update_offset_size():
+	if self.offset_left != 0:
+		self.draw_size.x -= self.offset_left
+		self.offset_left = 0
+	if self.offset_right != 0:
+		self.draw_size.x += self.offset_right
+		self.offset_right = 0
+	if self.offset_top != 0:
+		self.draw_size.y -= self.offset_top
+		self.offset_top = 0
+	if self.offset_bottom != 0:
+		self.draw_size.y += self.offset_bottom
+		self.offset_bottom = 0
+
+func _load_card_models():
+	if !self.layer_background.is_empty():
+		self.layer_background_texture = load(self.layer_background)
+	if !self.layer_creature.is_empty():
+		self.layer_creature_texture = load(self.layer_creature)
+	if !self.layer_border.is_empty():
+		self.layer_border_texture = load(self.layer_border)
+	if !self.layer_extra.is_empty():
+		self.layer_extra_texture = load(self.layer_extra)
+
+func _draw_card_model():
+	if !self.layer_background.is_empty():
+		var color_filter = self.tier_common
+		match self.tier:
+			TierBackground.Uncommon:
+				color_filter = self.tier_uncommon
+			TierBackground.Rare:
+				color_filter = self.tier_rare
+			TierBackground.VeryRare:
+				color_filter = self.tier_veryrare
+		draw_texture(self.layer_background_texture, Vector2(), color_filter)
+	if !self.layer_creature.is_empty():
+		draw_texture(self.layer_creature_texture, Vector2())
+	if !self.layer_border.is_empty():
+		draw_texture(self.layer_border_texture, Vector2())
+	if !self.layer_extra.is_empty():
+		draw_texture(self.layer_extra_texture, Vector2())
 
 func _draw_border():
 	var width = self.border_width
-	var card_size = self.size_minimum_size
+	var card_size = self.draw_size
 	if border_radius == 0:
 		var border_rect = Rect2()
 		match self.border_position:

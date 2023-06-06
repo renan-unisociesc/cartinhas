@@ -16,6 +16,8 @@ var can_manipulate_tree = false
 @export var card_amount = 0:
 	set(value):
 		card_amount = value
+		if value == 0:
+			self.cards_scale = 1
 		if self.can_manipulate_tree:
 			self._sync_nodes()
 			var need_update = self.card_amount != self.get_child_count()
@@ -25,7 +27,6 @@ var can_manipulate_tree = false
 				self.remove_child(self.get_child(-1))
 			if need_update:
 				_update_card_distribution()
-
 @export var row_limit = 0:
 	set(value):
 		row_limit = value if value >= 0 else 0
@@ -36,6 +37,14 @@ var can_manipulate_tree = false
 		background_color = value
 		self._update_cards()
 
+@export_range(0.001, 5) var cards_scale : float = 1.0:
+	set(value):
+		cards_scale = value
+		self.scale.x = value
+		self.scale.y = value
+		for card in self.get_children():
+			if snapped(card.size_scale, 0.001) != snapped(value, 0.001):
+				card.size_scale = value
 
 
 func _enter_tree():
@@ -46,8 +55,7 @@ func _enter_tree():
 func _process(delta):
 	if self.card_amount != self.get_child_count():
 		self._update_cards()
-	if self.card_amount != self.get_tree().get_edited_scene_root().get_child(self.get_index()).get_child_count():
-		self._sync_nodes()
+	self._sync_nodes()
 
 func _draw():
 	#draw background rect
@@ -89,10 +97,9 @@ func _update_card_distribution():
 	self.size.x = 0
 	if self.get_child_count() > 0:
 		var cards = self.get_children()
-		var base_texture = cards[0].texture
-		if not base_texture:
-			base_texture = load(Card.TEMPLATE_TEXTURE)
-		var base_size = base_texture.get_size()
+		var base_size = cards[0].size
+		if base_size == Vector2.ZERO:
+			base_size = load(Card.TEMPLATE_TEXTURE).get_size()
 		var card_spacing = Vector2(self.spacing.x + base_size.x, self.spacing.y + base_size.y)
 		match self.overlapping:
 			0b01:
@@ -115,6 +122,7 @@ func _update_card_distribution():
 		# update each card position
 		var card_index = 0
 		for card in cards:
+			#card.size = base_size
 			if self.row_limit == 0:
 				card.position.x = card_spacing.x * card_index
 				card.position.y = 0
